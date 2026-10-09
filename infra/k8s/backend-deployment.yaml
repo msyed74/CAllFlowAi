@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: callflow-backend
+  labels:
+    app: callflow-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: callflow-backend
+  template:
+    metadata:
+      labels:
+        app: callflow-backend
+    spec:
+      containers:
+        - name: backend
+          image: callflow-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: callflow-secrets
+            - configMapRef:
+                name: callflow-config
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2048Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: callflow-backend-svc
+spec:
+  selector:
+    app: callflow-backend
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

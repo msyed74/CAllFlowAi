@@ -1,0 +1,66 @@
+services:
+  # 1. CallFlow AI - FastAPI Backend (WebSockets + REST API)
+  - type: web
+    name: callflow-backend
+    runtime: python
+    region: oregon
+    plan: starter
+    rootDir: .
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: callflow-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: callflow-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_MASTER_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_REALTIME_MODEL
+        value: gpt-4o-realtime-preview-2024-10-01
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_DEFAULT_PHONE_NUMBER
+        sync: false
+
+  # 2. CallFlow AI - Next.js 15 Frontend Dashboard
+  - type: web
+    name: callflow-frontend
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: callflow-backend
+          property: host
+
+databases:
+  - name: callflow-postgres
+    databaseName: callflow_db
+    user: callflow_user
+    plan: starter
+
+  - name: callflow-redis
+    plan: starter

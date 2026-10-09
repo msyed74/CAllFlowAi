@@ -1,0 +1,109 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: callflow_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-callflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-callflow_secure_password_prod}
+      POSTGRES_DB: ${POSTGRES_DB:-callflow_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - callflow_prod_net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: callflow_redis_prod
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-callflow_redis_password_prod}"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-callflow_redis_password_prod}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - callflow_prod_net
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: callflow_qdrant_prod
+    restart: always
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_prod_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - callflow_prod_net
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: callflow_backend_prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-callflow_user}:${POSTGRES_PASSWORD:-callflow_secure_password_prod}@postgres:5432/${POSTGRES_DB:-callflow_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-callflow_redis_password_prod}@redis:6379/0
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_at_least_32_characters_prod}
+    ports:
+      - "8000:8000"
+    networks:
+      - callflow_prod_net
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: callflow_frontend_prod
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000/api/v1
+    ports:
+      - "3000:3000"
+    networks:
+      - callflow_prod_net
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+  qdrant_prod_data:
+
+networks:
+  callflow_prod_net:
+    driver: bridge

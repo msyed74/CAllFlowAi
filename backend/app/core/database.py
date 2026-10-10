@@ -14,7 +14,13 @@ class Base(DeclarativeBase):
 
 
 # Check database driver dialect
-is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+is_sqlite = db_url.startswith("sqlite")
 
 engine_kwargs = {
     "echo": settings.DB_ECHO,
@@ -28,7 +34,7 @@ if not is_sqlite:
         "pool_timeout": settings.DB_POOL_TIMEOUT,
     })
 
-engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+engine = create_async_engine(db_url, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

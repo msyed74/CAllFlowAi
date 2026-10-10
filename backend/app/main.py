@@ -14,9 +14,11 @@ from backend.app.telephony.media_stream import ws_router as telephony_ws_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database tables if running with sqlite in development
-    if settings.DATABASE_URL.startswith("sqlite"):
+    # Startup: ensure database tables exist (idempotent across SQLite & PostgreSQL)
+    try:
         await init_db()
+    except Exception as e:
+        print(f"[Database Initialization Warning]: {e}")
     yield
     # Shutdown logic if needed
 

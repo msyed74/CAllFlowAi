@@ -27,12 +27,23 @@ class Settings(BaseSettings):
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ENCRYPTION_MASTER_KEY: str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 
-    # Database
     DATABASE_URL: str = "postgresql+asyncpg://callflow_user:callflow_pass@localhost:5432/callflow_db"
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT: int = 30
     DB_ECHO: bool = False
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        if not v:
+            return v
+        v = v.strip()
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://") and not v.startswith("postgresql+"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # Redis Cache & Realtime State
     REDIS_URL: str = "redis://localhost:6379/0"

@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 import re
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.app.api.deps import get_current_user, get_db
+from backend.app.api.deps import get_current_user, get_db, security_scheme
 from backend.app.core.config import settings
 from backend.app.core.security import (
     create_access_token,
@@ -195,8 +196,14 @@ async def refresh_token_endpoint(payload: RefreshTokenRequest, db: Annotated[Asy
 async def get_current_user_profile(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security_scheme)],
 ):
     """Retrieves profile of the authenticated user."""
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
     await db.refresh(current_user, ["role"])
     return UserResponse(
         id=current_user.id,

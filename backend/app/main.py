@@ -28,8 +28,8 @@ def create_application() -> FastAPI:
         title="CallFlow AI Backend",
         description="Production-grade AI Voice Automation Platform API",
         version="1.0.0",
-        docs_url="/docs" if settings.APP_ENV != "production" or settings.DEBUG else None,
-        redoc_url="/redoc" if settings.APP_ENV != "production" or settings.DEBUG else None,
+        docs_url="/docs",
+        redoc_url="/redoc",
         lifespan=lifespan,
     )
 

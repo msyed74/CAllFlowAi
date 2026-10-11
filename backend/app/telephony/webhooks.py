@@ -16,6 +16,7 @@ router = APIRouter(prefix="/telephony", tags=["Telephony Webhooks"])
 
 @router.post("/inbound")
 async def handle_inbound_call(
+    request: Request,
     CallSid: Annotated[str, Form()],
     From: Annotated[str, Form()],
     To: Annotated[str, Form()],
@@ -65,6 +66,10 @@ async def handle_inbound_call(
 
     # 4. Generate dynamic TwiML with bi-directional Media Stream
     media_stream_url = settings.TWILIO_MEDIA_STREAM_WS_URL
+    if not media_stream_url or "localhost" in media_stream_url:
+        host = request.headers.get("host") or "localhost:8000"
+        scheme = "wss" if "onrender.com" in host or request.headers.get("x-forwarded-proto") == "https" else "ws"
+        media_stream_url = f"{scheme}://{host}/ws/media-stream"
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>

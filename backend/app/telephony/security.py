@@ -41,6 +41,9 @@ async def verify_twilio_signature(
         )
 
     url = str(request.url)
+    if request.headers.get("x-forwarded-proto") == "https" and url.startswith("http://"):
+        url = url.replace("http://", "https://", 1)
+
     form_data = await request.form()
     params = {k: str(v) for k, v in form_data.items()}
 

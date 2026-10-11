@@ -4,28 +4,61 @@
  */
 
 function getBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!envUrl) {
-    if (typeof window !== "undefined") return "/api/v1";
-    return "http://localhost:8000/api/v1";
+  if (typeof window !== "undefined") {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (envUrl && (envUrl.includes(".onrender.com") || envUrl.includes("localhost") || envUrl.includes("127.0.0.1"))) {
+      let sanitized = envUrl.trim().replace(/\/+$/, "");
+      if (!sanitized.startsWith("http://") && !sanitized.startsWith("https://")) {
+        sanitized = `https://${sanitized}`;
+      }
+      if (!sanitized.endsWith("/api/v1")) {
+        sanitized = `${sanitized}/api/v1`;
+      }
+      return sanitized;
+    }
+    return "/api/v1";
   }
-  let sanitized = envUrl.trim().replace(/\/+$/, "");
-  if (!sanitized.startsWith("http://") && !sanitized.startsWith("https://")) {
-    sanitized = `https://${sanitized}`;
-  }
-  if (!sanitized.endsWith("/api/v1")) {
-    sanitized = `${sanitized}/api/v1`;
-  }
-  return sanitized;
+  return "http://localhost:8000/api/v1";
 }
 
-const BASE_URL = getBaseUrl();
+let tokenPromise: Promise<string | null> | null = null;
+
+async function getOrInitToken(baseUrl: string): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const existing = localStorage.getItem("callflow_token");
+  if (existing) return existing;
+
+  if (!tokenPromise) {
+    tokenPromise = (async () => {
+      try {
+        const demoUrl = `${baseUrl}/auth/demo-token`;
+        const res = await fetch(demoUrl, { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            localStorage.setItem("callflow_token", data.access_token);
+            return data.access_token;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not automatically initialize supervisor token:", e);
+      }
+      return null;
+    })();
+  }
+  return tokenPromise;
+}
 
 export async function fetchApi<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("callflow_token") : null;
+  const baseUrl = getBaseUrl();
+  let token = typeof window !== "undefined" ? localStorage.getItem("callflow_token") : null;
+  if (!token && typeof window !== "undefined" && !endpoint.includes("/auth/")) {
+    token = await getOrInitToken(baseUrl);
+  }
+
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
@@ -36,7 +69,9 @@ export async function fetchApi<T = any>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const url = endpoint.startsWith("http") ? endpoint : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
   const res = await fetch(url, {
     ...options,

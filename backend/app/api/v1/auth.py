@@ -215,3 +215,65 @@ async def get_current_user_profile(
 async def logout(current_user: Annotated[User, Depends(get_current_user)]):
     """Logs out user and invalidates session."""
     return {"message": "Successfully logged out"}
+
+
+@router.post("/demo-token")
+async def get_demo_token(db: Annotated[AsyncSession, Depends(get_db)]):
+    """Generates an initial demo admin token for the supervisor console."""
+    import uuid
+    # 1. Fetch or create default organization
+    org_stmt = select(Organization).order_by(Organization.created_at.asc()).limit(1)
+    org = (await db.execute(org_stmt)).scalar_one_or_none()
+    if not org:
+        org = Organization(
+            id=str(uuid.uuid4()),
+            name="Apex Solutions",
+            slug="apex-solutions",
+            status="active",
+        )
+        db.add(org)
+        await db.flush()
+
+    # 2. Fetch or create default admin role
+    role_stmt = select(Role).where(Role.organization_id == org.id, Role.name == "OrgAdmin").limit(1)
+    role = (await db.execute(role_stmt)).scalar_one_or_none()
+    if not role:
+        role = Role(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="OrgAdmin",
+            permissions=["*"],
+        )
+        db.add(role)
+        await db.flush()
+
+    # 3. Fetch or create default supervisor user
+    user_stmt = select(User).where(User.organization_id == org.id).order_by(User.created_at.asc()).limit(1)
+    user = (await db.execute(user_stmt)).scalar_one_or_none()
+    if not user:
+        user = User(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            role_id=role.id,
+            email="supervisor@apexsolutions.com",
+            password_hash=hash_password("ApexSupervisor2026!"),
+            first_name="Supervisor",
+            last_name="Admin",
+            status="active",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token({
+        "sub": user.id,
+        "org_id": org.id,
+        "email": user.email,
+        "role": role.name,
+    })
+    return {
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "organization_id": org.id,
+        "email": user.email,
+    }

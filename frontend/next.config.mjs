@@ -6,11 +6,17 @@ let rawBackendUrl =
 
 rawBackendUrl = rawBackendUrl.trim().replace(/\/+$/, "");
 
-// Ensure protocol is present so Next.js rewrites destination is a valid URL
-const backendUrl =
-  rawBackendUrl.startsWith("http://") || rawBackendUrl.startsWith("https://")
-    ? rawBackendUrl
-    : `https://${rawBackendUrl}`;
+// Ensure protocol and domain are present so Next.js rewrites destination is valid
+let backendUrl = rawBackendUrl;
+if (!backendUrl.startsWith("http://") && !backendUrl.startsWith("https://")) {
+  if (backendUrl.includes(".onrender.com")) {
+    backendUrl = `https://${backendUrl}`;
+  } else if (backendUrl.includes("localhost") || backendUrl.includes("127.0.0.1")) {
+    backendUrl = `http://${backendUrl}`;
+  } else {
+    backendUrl = `https://${backendUrl}.onrender.com`;
+  }
+}
 
 const nextConfig = {
   reactStrictMode: true,
